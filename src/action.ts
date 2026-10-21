@@ -16,16 +16,19 @@ async function main(): Promise<number> {
   const strict = input("STRICT") === "true";
   const config = await loadConfig(cwd, input("CONFIG") || undefined);
   const snapshotPath = resolve(config.root, config.snapshot);
-  if (!existsSync(snapshotPath)) {
+  const hasSnapshot = existsSync(snapshotPath);
+  if (!hasSnapshot && !config.rules.length) {
     console.log(
       `::error::No snapshot at ${relative(process.cwd(), snapshotPath) || config.snapshot}. Run \`npx wrapguard update\` and commit it.`,
     );
     return 2;
   }
 
-  const diff = diffSnapshots(await readSnapshot(snapshotPath), await scan(config));
+  const baseline = hasSnapshot ? await readSnapshot(snapshotPath) : undefined;
+  const current = await scan(config);
+  const diff = diffSnapshots(baseline, current.snapshot, current.overLimit);
   const failing = hasFailures(diff, strict);
-  const size = { pages: config.pages.length, widths: config.widths.length, strict };
+  const size = { pages: config.pages.length, widths: config.widths.length, strict, rules: config.rules.length };
   console.log(formatReport(diff, { ...size, verbose: true }));
 
   const markdown = formatMarkdown(diff, size);
@@ -33,12 +36,16 @@ async function main(): Promise<number> {
   await setOutputs(diff, failing);
   if (input("COMMENT") !== "false") await comment(markdown, failing);
 
-  if (failing) {
+  if (diff.changed.length) {
     console.log(
-      diff.changed.length
-        ? `::error::${diff.changed.length} piece(s) of text wrap differently. If intended, run \`npx wrapguard update\` and commit the snapshot.`
-        : "::error::Text or pages were added or removed (strict mode).",
+      `::error::${diff.changed.length} piece(s) of text wrap differently. If intended, run \`npx wrapguard update\` and commit the snapshot.`,
     );
+  }
+  if (diff.overLimit.length) {
+    console.log(`::error::${diff.overLimit.length} piece(s) of text go over their line limit.`);
+  }
+  if (failing && !diff.changed.length && !diff.overLimit.length) {
+    console.log("::error::Text or pages were added or removed (strict mode).");
   }
   return failing && input("FAIL_ON_CHANGE") !== "false" ? 1 : 0;
 }
@@ -47,6 +54,7 @@ async function setOutputs(diff: DiffResult, failing: boolean) {
   if (!process.env.GITHUB_OUTPUT) return;
   const outputs = {
     changed: diff.changed.length,
+    "over-limit": diff.overLimit.length,
     added: diff.added.length,
     removed: diff.removed.length,
     failed: failing,

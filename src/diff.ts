@@ -28,9 +28,24 @@ export interface TextChange {
   after: string;
 }
 
+export interface LimitViolation {
+  page: string;
+  key: string;
+  text: string;
+  /** The rule it breaks. */
+  selector: string;
+  maxLines: number;
+  /** Every width where the text takes more than `maxLines`. */
+  widths: { width: number; lines: number }[];
+}
+
 export interface DiffResult {
+  /** False when there is no snapshot yet, so only line limits were checked. */
+  hasBaseline: boolean;
   /** Text that now takes a different number of lines. These fail `wrapguard check`. */
   changed: ElementChange[];
+  /** Text over a line limit from `rules`. These fail `wrapguard check` too. */
+  overLimit: LimitViolation[];
   added: ElementNote[];
   removed: ElementNote[];
   /** Copy that changed without changing its line count. */
@@ -41,20 +56,31 @@ export interface DiffResult {
   elementCount: number;
 }
 
-export function diffSnapshots(baseline: Snapshot, current: Snapshot): DiffResult {
+/**
+ * Compares a scan with the saved snapshot. Without a snapshot (`baseline` undefined),
+ * the result only carries the line limit violations.
+ */
+export function diffSnapshots(
+  baseline: Snapshot | undefined,
+  current: Snapshot,
+  overLimit: LimitViolation[] = [],
+): DiffResult {
   const result: DiffResult = {
+    hasBaseline: baseline !== undefined,
     changed: [],
+    overLimit,
     added: [],
     removed: [],
     textOnly: [],
     missingPages: [],
-    missingWidths: current.widths.filter((width) => !baseline.widths.includes(width)),
+    missingWidths: baseline ? current.widths.filter((width) => !baseline.widths.includes(width)) : [],
     elementCount: 0,
   };
-  const widths = current.widths.filter((width) => baseline.widths.includes(width));
+  const widths = baseline ? current.widths.filter((width) => baseline.widths.includes(width)) : [];
 
   for (const [page, elements] of Object.entries(current.pages)) {
     result.elementCount += elements.length;
+    if (!baseline) continue;
     const before = baseline.pages[page];
     if (!before) {
       result.missingPages.push(page);
@@ -96,7 +122,7 @@ export function diffSnapshots(baseline: Snapshot, current: Snapshot): DiffResult
 }
 
 export function hasFailures(diff: DiffResult, strict: boolean): boolean {
-  if (diff.changed.length) return true;
+  if (diff.changed.length || diff.overLimit.length) return true;
   return (
     strict &&
     (diff.added.length > 0 || diff.removed.length > 0 || diff.missingPages.length > 0 || diff.missingWidths.length > 0)

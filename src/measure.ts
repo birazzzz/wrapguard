@@ -1,8 +1,30 @@
+export interface MeasureRule {
+  /** Position in the config's `rules`, so results can point back at it. */
+  index: number;
+  selector: string;
+  maxLines: number;
+}
+
 export interface MeasureOptions {
   /** Elements whose text is measured. */
   selector: string;
   /** Elements (and their contents) that are never measured. */
   ignore: string[];
+  /** Line limits to check at this width. */
+  rules?: MeasureRule[];
+}
+
+export interface RuleHit {
+  rule: number;
+  key: string;
+  text: string;
+  lines: number;
+}
+
+export interface PageMeasurement {
+  elements: MeasuredElement[];
+  /** Elements that take more lines than a rule allows. */
+  overLimit: RuleHit[];
 }
 
 export interface MeasuredElement {
@@ -18,7 +40,7 @@ export interface MeasuredElement {
  * Runs inside the page (via `page.evaluate`), so it must stay self-contained:
  * no imports and no references to anything outside this function.
  */
-export function measureInPage(options: MeasureOptions): MeasuredElement[] {
+export function measureInPage(options: MeasureOptions): PageMeasurement {
   const ignoreSelector = ["[data-wrapguard-ignore]", ...options.ignore].join(",");
   // Tags kept in structural keys. Wrapper divs and spans come and go too often to be part of a name.
   const landmarkTags = new Set([
@@ -116,7 +138,9 @@ export function measureInPage(options: MeasureOptions): MeasuredElement[] {
     return false;
   };
 
-  const measure = (root: Element): { lines: number; text: string } => {
+  // `exclusive` is for the snapshot, where text belongs to one element only. Line rules
+  // measure all the visible text inside the element they match.
+  const measure = (root: Element, exclusive = true): { lines: number; text: string } => {
     const rectsByBlock = new Map<Element, DOMRect[]>();
     let text = "";
     let previousBlock: Element | undefined;
@@ -124,7 +148,8 @@ export function measureInPage(options: MeasureOptions): MeasuredElement[] {
     const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
     for (let node = walker.nextNode(); node; node = walker.nextNode()) {
       if (!node.nodeValue || !node.nodeValue.trim()) continue;
-      if (node.parentElement?.closest(ignoreSelector) || !ownsText(node, root)) continue;
+      if (node.parentElement?.closest(ignoreSelector)) continue;
+      if (exclusive ? !ownsText(node, root) : isHiddenWithin(node.parentElement, root)) continue;
       range.selectNodeContents(node);
       const block = blockOf(node, root);
       let shown = false;
@@ -225,6 +250,7 @@ export function measureInPage(options: MeasureOptions): MeasuredElement[] {
 
   const results: MeasuredElement[] = [];
   const usedKeys = new Map<string, number>();
+  const keyByElement = new Map<Element, string>();
 
   for (const el of candidates) {
     // A link inside a paragraph or list item is part of that element's lines.
@@ -238,7 +264,25 @@ export function measureInPage(options: MeasureOptions): MeasuredElement[] {
     usedKeys.set(key, seen + 1);
     if (seen > 0) key = `${key} ~${seen + 1}`;
 
+    keyByElement.set(el, key);
     results.push({ key, text, lines });
   }
-  return results;
+
+  const overLimit: RuleHit[] = [];
+  for (const rule of options.rules ?? []) {
+    let matches: Element[];
+    try {
+      matches = [...document.querySelectorAll(rule.selector)];
+    } catch {
+      throw new Error(`rules[${rule.index}] has a selector the browser can't read: ${rule.selector}`);
+    }
+    for (const el of matches) {
+      if (el.closest(ignoreSelector) || isHiddenWithin(el, document.documentElement)) continue;
+      const { lines, text } = measure(el, false);
+      if (lines > rule.maxLines && text) {
+        overLimit.push({ rule: rule.index, key: keyByElement.get(el) ?? keyFor(el), text, lines });
+      }
+    }
+  }
+  return { elements: results, overLimit };
 }

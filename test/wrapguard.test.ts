@@ -6,7 +6,7 @@ import { join } from "node:path";
 import { after, before, describe, test } from "node:test";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { promisify } from "node:util";
-import { resolveConfig } from "../src/config.ts";
+import { resolveConfig, type LineRule } from "../src/config.ts";
 import { diffSnapshots } from "../src/diff.ts";
 import { scan } from "../src/scan.ts";
 import { readSnapshot, serializeSnapshot, type Snapshot } from "../src/snapshot.ts";
@@ -26,8 +26,8 @@ after(async () => {
   await rm(dir, { recursive: true, force: true });
 });
 
-function config(widths = [800, 400]) {
-  return resolveConfig({ baseUrl: pathToFileURL(`${dir}/`).href, pages: ["page.html"], widths }, dir);
+function config(widths = [800, 400], rules?: LineRule[]) {
+  return resolveConfig({ baseUrl: pathToFileURL(`${dir}/`).href, pages: ["page.html"], widths, rules }, dir);
 }
 
 function lines(snapshot: Snapshot, key: string) {
@@ -39,7 +39,7 @@ function lines(snapshot: Snapshot, key: string) {
 describe("scan", () => {
   let snapshot: Snapshot;
   before(async () => {
-    snapshot = await scan(config());
+    snapshot = (await scan(config())).snapshot;
   });
 
   test("counts lines per width", () => {
@@ -105,13 +105,13 @@ describe("scan", () => {
 
 describe("diff", () => {
   test("reports a heading that wraps onto more lines", async () => {
-    const baseline = await scan(config());
+    const baseline = (await scan(config())).snapshot;
     const page = join(dir, "page.html");
     const original = await readFile(page, "utf8");
     await writeFile(page, original.replace("Short title", "A much longer title"));
     try {
       // "A much longer title" still fits 20ch, but needs three lines at 10ch.
-      const diff = diffSnapshots(baseline, await scan(config()));
+      const diff = diffSnapshots(baseline, (await scan(config())).snapshot);
       assert.deepEqual(
         diff.changed.map(({ key, changes }) => ({ key, changes })),
         [{ key: "main > h1", changes: [{ width: 400, before: 2, after: 3 }] }],
@@ -123,7 +123,63 @@ describe("diff", () => {
   });
 });
 
+describe("line limits", () => {
+  test("reports text over its limit at the widths where it goes over", async () => {
+    const { overLimit } = await scan(config([800, 400], [{ selector: "h1", maxLines: 1 }]));
+    assert.deepEqual(overLimit, [
+      { page: "page.html", key: "main > h1", text: "Short title", selector: "h1", maxLines: 1, widths: [{ width: 400, lines: 2 }] },
+    ]);
+  });
+
+  test("measures the full text of a link inside a paragraph", async () => {
+    // "Read the terms of use first" breaks inside "terms of use" at both 20ch and 10ch.
+    const { overLimit } = await scan(config([800, 400], [{ selector: "[data-wrapguard=inline-link] a", maxLines: 1 }]));
+    assert.deepEqual(
+      overLimit.map(({ key, text, widths }) => ({ key, text, widths })),
+      [{ key: "inline-link > a", text: "terms of use", widths: [{ width: 800, lines: 2 }, { width: 400, lines: 2 }] }],
+    );
+  });
+
+  test("only checks a rule at its own widths, and passes text within the limit", async () => {
+    const { overLimit } = await scan(
+      config([800, 400], [
+        { selector: "h1", maxLines: 1, widths: [800] },
+        { selector: "header li", maxLines: 1 },
+      ]),
+    );
+    assert.deepEqual(overLimit, []);
+  });
+
+  test("rejects rules that can't work", async () => {
+    assert.throws(() => config([800, 400], [{ selector: "h1", maxLines: 0 }]), /rules\[0\] needs `maxLines`/);
+    assert.throws(() => config([800, 400], [{ selector: " ", maxLines: 2 }]), /rules\[0\] needs a `selector`/);
+    assert.throws(() => config([800, 400], [{ selector: "h1", maxLines: 2, widths: [1024] }]), /rules\[0\]\.widths/);
+    await assert.rejects(scan(config([800], [{ selector: "h1[", maxLines: 2 }])), /rules\[0\] has a selector the browser can't read/);
+  });
+});
+
 describe("cli", () => {
+  test("check runs the line limits on their own when there's no snapshot yet", async () => {
+    const write = (name: string, rules: LineRule[]) =>
+      writeFile(
+        join(dir, name),
+        JSON.stringify({ baseUrl: pathToFileURL(`${dir}/`).href, pages: ["page.html"], widths: [800, 400], snapshot: "none.snap.json", rules }),
+      );
+    await write("strict-rules.json", [{ selector: "h1", maxLines: 1 }]);
+    await write("loose-rules.json", [{ selector: "h1", maxLines: 2 }]);
+    const node = (args: string[]) => run(process.execPath, [cli, ...args], { cwd: dir, env: { ...process.env, NO_COLOR: "1" } });
+
+    await assert.rejects(node(["check", "-c", "strict-rules.json"]), (error: { code: number; stdout: string }) => {
+      assert.equal(error.code, 1);
+      assert.match(error.stdout, /No snapshot yet, so only line limits were checked/);
+      assert.match(error.stdout, /h1  max 1 line\n    page\.html  main > h1  "Short title"\n      400px 2 lines/);
+      assert.match(error.stdout, /✗ 1 piece of text goes over its line limit/);
+      return true;
+    });
+    const passed = await node(["check", "-c", "loose-rules.json"]);
+    assert.match(passed.stdout, /✓ All text is within its line limits/);
+  });
+
   test("update then check passes, and fails after a wrap change", async () => {
     await writeFile(
       join(dir, "wrapguard.config.json"),

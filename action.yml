@@ -1,5 +1,5 @@
 name: wrapguard
-description: Fail a pull request when text wraps onto more or fewer lines, and comment what moved.
+description: Fail a pull request when text wraps onto more or fewer lines or goes over a line limit, and comment what moved.
 author: FynePDF
 branding:
   icon: align-left
@@ -16,7 +16,7 @@ inputs:
     description: Comment the result on the pull request. The comment is only created when something fails, and updated on later runs.
     default: "true"
   fail-on-change:
-    description: Fail the job when text wraps differently.
+    description: Fail the job when text wraps differently or goes over a line limit.
     default: "true"
   strict:
     description: Also fail on new or missing text and pages.
@@ -29,6 +29,9 @@ outputs:
   changed:
     description: Number of text elements whose line count changed.
     value: ${{ steps.check.outputs.changed }}
+  over-limit:
+    description: Number of text elements over a line limit from `rules`.
+    value: ${{ steps.check.outputs.over-limit }}
   added:
     description: Number of new text elements.
     value: ${{ steps.check.outputs.added }}

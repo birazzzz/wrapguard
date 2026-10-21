@@ -73,6 +73,43 @@ From then on, compare against it. The exit code is 1 when any text wraps differe
 npx wrapguard check
 ```
 
+## Line limits
+
+The snapshot catches changes. Line limits catch text that's too long, even the first time you run it. Add `rules` to your config:
+
+```json
+{
+  "baseUrl": "http://localhost:3000",
+  "pages": ["/", "/pricing"],
+  "rules": [
+    { "selector": "h1", "maxLines": 2 },
+    { "selector": "button", "maxLines": 1 },
+    { "selector": "nav a", "maxLines": 1, "widths": [390] }
+  ]
+}
+```
+
+`wrapguard check` then also fails when any matching element takes more lines than its rule allows. fynepdf.com passes the `h1` and `button` rules above. A tighter rule, one line for the tool cards on its home page, finds the three that wrap on tablets:
+
+```
+Line limits
+  #home-panel-tools a  max 1 line
+    /  #home-panel-tools > a[5]  "Compare PDF AI"
+      768px 2 lines
+    /  #home-panel-tools > a[7]  "Summarize PDF AI"
+      1024px 2  ·  768px 2 lines
+    /  #home-panel-tools > a[12]  "Chat with PDF AI"
+      768px 2 lines
+
+✗ 3 pieces of text go over their line limit.
+  Shorten the text, give it more room, or change the rule.
+```
+
+- Each rule measures the full text of every element it matches, so `nav a` checks each link even when the links sit inside list items.
+- `widths` limits a rule to some of your widths. Leave it out to check all of them.
+- Rules work without a snapshot. With `rules` and no `wrapguard.snap.json`, `check` runs the line limits on their own, which is an easy way to start.
+- `update` still saves the snapshot when something is over a limit, and lists what `check` will fail on.
+
 ## Run it in CI
 
 ### GitHub Actions
@@ -112,17 +149,17 @@ Change `npm start` and the port to whatever serves your built site. The action i
 | `working-directory` | `.`                   | Folder with your config and snapshot.                           |
 | `config`            | found automatically   | Config file, relative to `working-directory`.                   |
 | `comment`           | `true`                | Comment on the pull request.                                    |
-| `fail-on-change`    | `true`                | Fail the job when text wraps differently.                       |
+| `fail-on-change`    | `true`                | Fail the job on wrap changes or text over a line limit.         |
 | `strict`            | `false`               | Also fail on new or missing text and pages.                     |
 | `github-token`      | `${{ github.token }}` | Token used to comment.                                          |
 
-Outputs: `changed`, `added` and `removed` (counts) and `failed` (`true` or `false`).
+Outputs: `changed`, `over-limit`, `added` and `removed` (counts) and `failed` (`true` or `false`).
 
 Pull requests from forks get a read-only token, so they can't be commented on. Their result is still in the job log and summary. There's no tagged release yet, so `@main` follows the latest code. Pin a commit SHA if you'd rather it didn't change under you.
 
 ### Other CI
 
-`npx wrapguard check --markdown` prints the same report as Markdown, for a GitLab merge request note or anything else that takes Markdown. It exits with 1 when text wraps differently.
+`npx wrapguard check --markdown` prints the same report as Markdown, for a GitLab merge request note or anything else that takes Markdown. It exits with 1 when text wraps differently or goes over a line limit.
 
 ## Screenshot tests or wrapguard?
 
@@ -148,6 +185,7 @@ They do different jobs. Keep screenshot tests for visual design and use wrapguar
 | `snapshot`    | `wrapguard.snap.json`    | Where the baseline is saved.                                         |
 | `concurrency` | `4`                      | Pages loaded at once.                                                |
 | `settle`      | `0`                      | Extra milliseconds to wait after fonts load, for late-rendered text. |
+| `rules`       | `[]`                     | [Line limits](#line-limits): `selector`, `maxLines`, optional `widths`. |
 
 Use `wrapguard.config.js` with `defineConfig` from `wrapguard` if you want types.
 
@@ -171,6 +209,7 @@ Skip anything that's meant to change, like dates, counters or user names:
 wrapguard init              Create wrapguard.config.json
 wrapguard update            Scan your pages and save the line counts
 wrapguard check             Scan again and fail if any text wraps differently
+                            or goes over a line limit
   --strict                  Also fail on new or missing text and pages
   --verbose                 List new, missing and reworded text too
   --json                    Print the result as JSON
@@ -194,7 +233,7 @@ wrapguard check             Scan again and fail if any text wraps differently
 
 ## Status
 
-Early. Coming next: line limits such as "`h1` max 2 lines", reading pages from your sitemap, and a first npm release.
+Early. Coming next: reading pages from your sitemap, starting your dev server for you, and a first npm release.
 
 ---
 
