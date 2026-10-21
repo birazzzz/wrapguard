@@ -75,11 +75,17 @@ npx wrapguard check
 
 ## Run it in CI
 
-A GitHub Actions job that builds your site, starts it and checks it on every pull request:
+### GitHub Actions
+
+The wrapguard action checks your pages and comments the result on the pull request. It only posts when something fails, then updates that same comment on later pushes, so a fixed pull request shows ✓ instead of an old failure. The result is in the job summary too.
 
 ```yaml
 name: wrapguard
 on: pull_request
+
+permissions:
+  contents: read
+  pull-requests: write # lets the action comment
 
 jobs:
   wrapguard:
@@ -91,16 +97,32 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
-      - run: npx playwright install --with-deps chromium
       - run: npm run build
       - name: Start the site
         run: npm start &
       - name: Wait for it
         run: curl --retry 30 --retry-delay 1 --retry-connrefused -sf http://localhost:3000 > /dev/null
-      - run: npx wrapguard check
+      - uses: birazzzz/wrapguard@main
 ```
 
-Change `npm start` and the port to whatever serves your built site. When a change is intended, run `npx wrapguard update` and commit the new snapshot with it.
+Change `npm start` and the port to whatever serves your built site. The action installs wrapguard and Chromium itself. When a change is intended, run `npx wrapguard update` locally and commit the new snapshot with it.
+
+| Input               | Default               | What it does                                                    |
+| ------------------- | --------------------- | --------------------------------------------------------------- |
+| `working-directory` | `.`                   | Folder with your config and snapshot.                           |
+| `config`            | found automatically   | Config file, relative to `working-directory`.                   |
+| `comment`           | `true`                | Comment on the pull request.                                    |
+| `fail-on-change`    | `true`                | Fail the job when text wraps differently.                       |
+| `strict`            | `false`               | Also fail on new or missing text and pages.                     |
+| `github-token`      | `${{ github.token }}` | Token used to comment.                                          |
+
+Outputs: `changed`, `added` and `removed` (counts) and `failed` (`true` or `false`).
+
+Pull requests from forks get a read-only token, so they can't be commented on. Their result is still in the job log and summary. There's no tagged release yet, so `@main` follows the latest code. Pin a commit SHA if you'd rather it didn't change under you.
+
+### Other CI
+
+`npx wrapguard check --markdown` prints the same report as Markdown, for a GitLab merge request note or anything else that takes Markdown. It exits with 1 when text wraps differently.
 
 ## Screenshot tests or wrapguard?
 
@@ -152,6 +174,7 @@ wrapguard check             Scan again and fail if any text wraps differently
   --strict                  Also fail on new or missing text and pages
   --verbose                 List new, missing and reworded text too
   --json                    Print the result as JSON
+  --markdown                Print the result as Markdown
 ```
 
 ## Limits
@@ -171,7 +194,7 @@ wrapguard check             Scan again and fail if any text wraps differently
 
 ## Status
 
-Early. Coming next: a GitHub Action that comments the changes on your pull request, line limits such as "`h1` max 2 lines", and reading pages from your sitemap.
+Early. Coming next: line limits such as "`h1` max 2 lines", reading pages from your sitemap, and a first npm release.
 
 ---
 

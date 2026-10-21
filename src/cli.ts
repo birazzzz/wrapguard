@@ -3,9 +3,9 @@ import { existsSync } from "node:fs";
 import { readFile, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { parseArgs } from "node:util";
-import { CONFIG_FILES, ConfigError, DEFAULTS, loadConfig, type ResolvedConfig } from "./config.ts";
+import { CONFIG_FILES, ConfigError, DEFAULTS, loadConfig } from "./config.ts";
 import { diffSnapshots, hasFailures } from "./diff.ts";
-import { color, formatReport } from "./report.ts";
+import { color, formatMarkdown, formatReport } from "./report.ts";
 import { scan } from "./scan.ts";
 import { readSnapshot, writeSnapshot } from "./snapshot.ts";
 
@@ -21,6 +21,7 @@ Options
       --strict                check: also fail on new or missing text and pages
       --verbose               check: list new, missing and reworded text too
       --json                  check: print the result as JSON
+      --markdown              check: print the result as Markdown, e.g. for a CI comment
   -h, --help
   -v, --version
 
@@ -35,6 +36,7 @@ async function main(argv: string[]): Promise<number> {
       strict: { type: "boolean", default: false },
       verbose: { type: "boolean", default: false },
       json: { type: "boolean", default: false },
+      markdown: { type: "boolean", default: false },
       help: { type: "boolean", short: "h", default: false },
       version: { type: "boolean", short: "v", default: false },
     },
@@ -72,10 +74,13 @@ async function main(argv: string[]): Promise<number> {
         return 2;
       }
       const baseline = await readSnapshot(path);
-      const current = await scan(config, values.json ? undefined : progress());
+      const plain = values.json || values.markdown;
+      const current = await scan(config, plain ? undefined : progress());
       const diff = diffSnapshots(baseline, current);
+      const size = { pages: config.pages.length, widths: config.widths.length, strict: values.strict };
       if (values.json) console.log(JSON.stringify(diff, null, 2));
-      else console.log(formatReport(diff, reportSize(config, values.verbose)));
+      else if (values.markdown) console.log(formatMarkdown(diff, size));
+      else console.log(formatReport(diff, { ...size, verbose: values.verbose }));
       return hasFailures(diff, values.strict) ? 1 : 0;
     }
     default:
@@ -103,10 +108,6 @@ async function init(cwd: string): Promise<number> {
     ].join("\n"),
   );
   return 0;
-}
-
-function reportSize(config: ResolvedConfig, verbose: boolean) {
-  return { pages: config.pages.length, widths: config.widths.length, verbose };
 }
 
 function progress() {

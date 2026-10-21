@@ -44,3 +44,30 @@ jobs:
         run: pnpm exec playwright install --with-deps chromium
 
       - run: pnpm test
+
+  action:
+    name: Action (self-test)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          # The action installs with npm; without this, setup-node reads `packageManager` and looks for pnpm.
+          package-manager-cache: false
+
+      - name: Serve the test page
+        run: python3 -m http.server 8080 --directory test/action > /dev/null 2>&1 &
+
+      - name: Run this repository's action
+        id: wrapguard
+        uses: ./
+        with:
+          working-directory: test/action
+
+      - name: Expect no wrapping changes
+        run: test "${{ steps.wrapguard.outputs.changed }}" = "0"
