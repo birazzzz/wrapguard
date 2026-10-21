@@ -178,6 +178,11 @@ describe("cli", () => {
     });
     const passed = await node(["check", "-c", "loose-rules.json"]);
     assert.match(passed.stdout, /✓ All text is within its line limits/);
+
+    // update saves anyway, and lists what check will fail on, one item per line.
+    const updated = await node(["update", "-c", "strict-rules.json"]);
+    assert.match(updated.stdout, /\nLine limits\n  h1  max 1 line\n    page\.html  main > h1  "Short title"\n      400px 2 lines\n/);
+    assert.match(updated.stdout, /⚠ 1 piece\(s\) of text go over their line limit/);
   });
 
   test("update then check passes, and fails after a wrap change", async () => {
