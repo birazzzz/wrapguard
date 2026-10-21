@@ -34,14 +34,24 @@ To test the pipeline without publishing, run the workflow by hand (Actions → R
 
 Trusted publishing is set per package, and the package has to exist first.
 
-1. **First version from your computer.** `npm login`, then `npm publish` from a clean `main`. A brand-new package goes through npm's processing and may need approval under Staged Packages.
-2. **Add the trusted publisher.** npmjs.com → Packages → the package → Settings → Trusted publishing → GitHub Actions:
-   - Organization or user: `birazzzz`
-   - Repository: `wrapguard`
-   - Workflow filename: `release.yml`
-   - Environment name: leave empty
-   - Allowed actions: staging only (CI stages, a person approves)
-3. **After the first release through the workflow works**, lock the package to it: Settings → Publishing access → "Require two-factor authentication and disallow tokens". Trusted publishing keeps working; tokens stop.
+1. **First version from your computer.** `npm login`, then `npm publish` from a clean `main`. npm needs two-factor login turned on for your account. A brand-new package is processed for a few minutes first: `npm view <name> versions` shows only a `0.0.0-stage` placeholder until the real version appears.
+2. **Merge `release.yml` into `main` first.** npm links the package to that file, so it has to exist on GitHub.
+3. **Add the trusted publisher from the command line.** It says plainly whether it worked, which the website form didn't (for wrapguard, the form never saved). `npm trust` needs a newer npm than the one on this computer, so run it through `npx`, signed in with `npm login` first:
+
+   ```bash
+   npx -y npm@11 trust github wrapguard --file release.yml --repository birazzzz/wrapguard --allow-stage-publish
+   ```
+
+   It asks for your two-factor login, then prints `Trust configuration created successfully`. Check what npm stored:
+
+   ```bash
+   npx -y npm@11 trust list wrapguard
+   ```
+
+   It should show the repository, `release.yml` and `permissions: stage publish`. Leave out `--allow-publish`, so CI can only stage and a person approves every version. To remove a trusted publisher, use `npx -y npm@11 trust revoke wrapguard --id=<id from the list>`.
+
+   The website route is npmjs.com → the package → Settings → Trusted Publisher → GitHub Actions, with the same values and both "Allow npm publish" and "Allow npm dist-tag" unchecked. When it works, the section lists the repository and workflow instead of only the publisher buttons.
+4. **After the first release through the workflow works**, lock the package to it: Settings → Publishing access → "Require two-factor authentication and disallow bypass 2fa tokens". Trusted publishing keeps working; tokens stop.
 
 ## Launching another open-source package
 
