@@ -63,4 +63,4 @@ wrapguard is the template. For the next one, copy and adjust:
 - **README:** a real demo at the top (`docs/demo.mjs` builds an animated terminal SVG from real output), how it works, install, quick start, CI usage, an honest comparison with the usual alternative, limits, and the closing line crediting FynePDF. Badges: npm version and CI.
 - **GitHub About box:** description, website, and topics.
 - **The first release** by hand (above), then trusted publishing for every release after.
-- **On fynepdf.com:** a mention on `/developers` and a line under Developers in `llms.txt`, so links to the project land on the FynePDF domain.
+- **On fynepdf.com, only if the project is about PDFs.** Its pages, `/developers` included, present PDF products. wrapguard was taken off `/developers` because it's a frontend tool. A project that isn't about PDFs gets its FynePDF credit in the README and the npm `author` field instead.
