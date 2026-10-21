@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>wrapguard fixture</title>
+    <style>
+      /* Monospace + ch widths: every glyph is 1ch, so line counts are the same on any OS. */
+      body { margin: 0; font: 16px/1.5 monospace; }
+      .box { width: 20ch; margin: 0; }
+      @media (max-width: 500px) { .box { width: 10ch; } }
+      .sr-only {
+        position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+        overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0;
+      }
+      .desktop-only { display: block; }
+      @media (max-width: 500px) { .desktop-only { display: none; } }
+      button { font: inherit; padding: 0; border: 0; background: none; }
+      /* A two-line title with a small badge centred beside it, like a tool card. */
+      .card { display: flex; align-items: center; gap: 1ch; width: 14ch; }
+      .card-title { width: 10ch; }
+      .badge { font-size: 12px; }
+      .stack { display: flex; flex-direction: column; width: 20ch; }
+    </style>
+  </head>
+  <body>
+    <header>
+      <nav>
+        <ul>
+          <li><a href="#">Pricing</a></li>
+          <li><a href="#">Docs</a></li>
+        </ul>
+      </nav>
+    </header>
+    <main>
+      <h1 class="box">Short title</h1>
+      <p class="box" data-wrapguard="mixed">Big <small>small</small> end</p>
+      <button class="box" data-wrapguard="menu-button">
+        <svg width="16" height="16" aria-hidden="true"><rect width="16" height="16" /></svg>
+        Menu<span class="sr-only">Open the main navigation menu please</span>
+      </button>
+      <a class="card" href="#">
+        <span class="card-title">Compare PDF files</span>
+        <span class="badge">AI</span>
+      </a>
+      <a class="stack" href="#">
+        <span class="stack-title">Title</span>
+        <span class="stack-text">Two blocks</span>
+      </a>
+      <a class="stack" href="#">
+        <h3>Plan</h3>
+        <p>Price per month</p>
+        <span>$7</span>
+      </a>
+      <p class="box" data-wrapguard="inline-link">Read the <a href="#">terms of use</a> first</p>
+      <p class="box" style="visibility: hidden">Hidden words that take space</p>
+      <p class="box" data-wrapguard-ignore>Ignored words that should not be measured</p>
+      <section>
+        <h2 class="box">First</h2>
+        <p class="box" id="lead">aaaa bbbb cccc dddd eeee</p>
+      </section>
+      <section>
+        <h2 class="box">Second</h2>
+        <p class="box desktop-only">Only on wide</p>
+      </section>
+    </main>
+  </body>
+</html>

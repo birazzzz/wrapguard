@@ -1,0 +1,54 @@
+{
+  "name": "wrapguard",
+  "version": "0.1.0",
+  "description": "Catch text that starts wrapping onto more lines, before it ships. Line-count snapshots for your pages at every breakpoint.",
+  "keywords": [
+    "responsive",
+    "line-wrap",
+    "text-wrap",
+    "copy",
+    "i18n",
+    "playwright",
+    "visual-regression",
+    "ci"
+  ],
+  "homepage": "https://github.com/birazzzz/wrapguard#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/birazzzz/wrapguard.git"
+  },
+  "bugs": "https://github.com/birazzzz/wrapguard/issues",
+  "author": "FynePDF (https://fynepdf.com)",
+  "license": "MIT",
+  "type": "module",
+  "bin": {
+    "wrapguard": "dist/cli.js"
+  },
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc --noEmit",
+    "test": "node --test test/*.test.ts",
+    "prepublishOnly": "pnpm run build"
+  },
+  "dependencies": {
+    "playwright": "^1.56.1"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "typescript": "^5.9.0"
+  }
+}
