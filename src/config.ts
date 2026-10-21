@@ -3,6 +3,15 @@ import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 
+export interface LineRule {
+  /** Elements the rule applies to, e.g. `h1` or `nav a`. Each one's full text is measured. */
+  selector: string;
+  /** Most lines the text may take. */
+  maxLines: number;
+  /** Widths the rule applies at. All widths when left out. */
+  widths?: number[];
+}
+
 export interface WrapguardConfig {
   /** Where your site runs, e.g. `http://localhost:3000`. Page paths are resolved against it. */
   baseUrl: string;
@@ -20,6 +29,8 @@ export interface WrapguardConfig {
   concurrency?: number;
   /** Extra wait after fonts load, in milliseconds, for pages that render text late. */
   settle?: number;
+  /** Line limits checked on every run, with or without a snapshot. */
+  rules?: LineRule[];
 }
 
 export type ResolvedConfig = Required<WrapguardConfig> & { root: string };
@@ -37,6 +48,7 @@ export const DEFAULTS = {
   snapshot: "wrapguard.snap.json",
   concurrency: 4,
   settle: 0,
+  rules: [] as LineRule[],
 };
 
 export const CONFIG_FILES = ["wrapguard.config.js", "wrapguard.config.mjs", "wrapguard.config.json"];
@@ -83,6 +95,21 @@ export function resolveConfig(raw: unknown, root: string): ResolvedConfig {
   if (!widths.length || widths.some((width) => !Number.isInteger(width) || width < 200)) {
     throw new ConfigError("`widths` must be whole numbers of at least 200.");
   }
+  const rules = config.rules ?? DEFAULTS.rules;
+  if (!Array.isArray(rules)) throw new ConfigError("`rules` must be a list, e.g. [{ \"selector\": \"h1\", \"maxLines\": 2 }].");
+  rules.forEach((rule, index) => {
+    const where = `rules[${index}]`;
+    if (!rule || typeof rule.selector !== "string" || !rule.selector.trim()) {
+      throw new ConfigError(`${where} needs a \`selector\`, e.g. "h1".`);
+    }
+    if (!Number.isInteger(rule.maxLines) || rule.maxLines < 1) {
+      throw new ConfigError(`${where} needs \`maxLines\`, a whole number of at least 1.`);
+    }
+    if (rule.widths !== undefined && (!Array.isArray(rule.widths) || rule.widths.some((width) => !widths.includes(width)))) {
+      throw new ConfigError(`${where}.widths must only list widths from \`widths\` (${widths.join(", ")}).`);
+    }
+  });
+
   return {
     root,
     baseUrl: config.baseUrl,
@@ -93,5 +120,6 @@ export function resolveConfig(raw: unknown, root: string): ResolvedConfig {
     snapshot: config.snapshot ?? DEFAULTS.snapshot,
     concurrency: Math.max(1, config.concurrency ?? DEFAULTS.concurrency),
     settle: config.settle ?? DEFAULTS.settle,
+    rules,
   };
 }

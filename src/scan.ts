@@ -1,7 +1,14 @@
 import { chromium, type Browser } from "playwright";
 import type { ResolvedConfig } from "./config.ts";
-import { measureInPage, type MeasuredElement } from "./measure.ts";
+import type { LimitViolation } from "./diff.ts";
+import { measureInPage, type PageMeasurement } from "./measure.ts";
 import type { Snapshot, SnapshotElement } from "./snapshot.ts";
+
+export interface ScanResult {
+  snapshot: Snapshot;
+  /** Text over a line limit from the config's `rules`. */
+  overLimit: LimitViolation[];
+}
 
 export interface ScanProgress {
   page: string;
@@ -10,13 +17,16 @@ export interface ScanProgress {
   total: number;
 }
 
-/** Loads every page at every width and records how many lines each piece of text takes. */
+/**
+ * Loads every page at every width, records how many lines each piece of text takes,
+ * and checks the line limits.
+ */
 export async function scan(
   config: ResolvedConfig,
   onProgress?: (progress: ScanProgress) => void,
-): Promise<Snapshot> {
+): Promise<ScanResult> {
   const jobs = config.pages.flatMap((page) => config.widths.map((width) => ({ page, width })));
-  const measured = new Map<string, MeasuredElement[]>();
+  const measured = new Map<string, PageMeasurement>();
   const jobKey = (page: string, width: number) => `${width} ${page}`;
 
   const browser = await launch();
@@ -45,7 +55,7 @@ export async function scan(
     // Keep document order of the widest layout, then add anything that only shows up narrower.
     const elements = new Map<string, SnapshotElement>();
     for (const width of config.widths) {
-      for (const { key, text, lines } of measured.get(jobKey(page, width)) ?? []) {
+      for (const { key, text, lines } of measured.get(jobKey(page, width))?.elements ?? []) {
         let element = elements.get(key);
         if (!element) {
           element = { key, text: excerpt(text), lines: {} };
@@ -56,7 +66,46 @@ export async function scan(
     }
     pages[page] = [...elements.values()];
   }
-  return { version: 1, widths: config.widths, pages };
+
+  // One entry per rule, page and element, listing every width where it goes over.
+  const overLimit = new Map<string, LimitViolation & { rule: number }>();
+  for (const page of config.pages) {
+    for (const width of config.widths) {
+      for (const hit of measured.get(jobKey(page, width))?.overLimit ?? []) {
+        const id = `${hit.rule}\n${page}\n${hit.key}`;
+        let violation = overLimit.get(id);
+        if (!violation) {
+          const rule = config.rules[hit.rule]!;
+          violation = {
+            rule: hit.rule,
+            page,
+            key: hit.key,
+            text: excerpt(hit.text),
+            selector: rule.selector,
+            maxLines: rule.maxLines,
+            widths: [],
+          };
+          overLimit.set(id, violation);
+        }
+        violation.widths.push({ width, lines: hit.lines });
+      }
+    }
+  }
+
+  // Rule by rule, page by page, in the order the elements appear on the page.
+  const pageOrder = new Map(config.pages.map((page, index) => [page, index]));
+  const position = (violation: LimitViolation) => {
+    const index = pages[violation.page]?.findIndex((element) => element.key === violation.key) ?? -1;
+    return index === -1 ? Number.MAX_SAFE_INTEGER : index;
+  };
+  const sorted = [...overLimit.values()].sort(
+    (a, b) => a.rule - b.rule || pageOrder.get(a.page)! - pageOrder.get(b.page)! || position(a) - position(b),
+  );
+
+  return {
+    snapshot: { version: 1, widths: config.widths, pages },
+    overLimit: sorted.map(({ rule: _rule, ...violation }) => violation),
+  };
 }
 
 async function launch(): Promise<Browser> {
@@ -76,7 +125,7 @@ async function measurePage(
   config: ResolvedConfig,
   page: string,
   width: number,
-): Promise<MeasuredElement[]> {
+): Promise<PageMeasurement> {
   const tab = await context.newPage();
   try {
     await tab.setViewportSize({ width, height: 900 });
@@ -87,7 +136,11 @@ async function measurePage(
     }
     await tab.evaluate(() => document.fonts.ready.then(() => undefined));
     if (config.settle > 0) await tab.waitForTimeout(config.settle);
-    return await tab.evaluate(measureInPage, { selector: config.selector, ignore: config.ignore });
+    const rules = config.rules
+      .map((rule, index) => ({ index, selector: rule.selector, maxLines: rule.maxLines, widths: rule.widths }))
+      .filter((rule) => !rule.widths || rule.widths.includes(width))
+      .map(({ index, selector, maxLines }) => ({ index, selector, maxLines }));
+    return await tab.evaluate(measureInPage, { selector: config.selector, ignore: config.ignore, rules });
   } finally {
     await tab.close();
   }

@@ -1,9 +1,11 @@
-import { hasFailures, type DiffResult, type ElementNote } from "./diff.ts";
+import { hasFailures, type DiffResult, type ElementNote, type LimitViolation } from "./diff.ts";
 
 export interface ReportOptions {
   pages: number;
   widths: number;
   strict?: boolean;
+  /** Number of line limit rules checked, for the summary. */
+  rules?: number;
 }
 
 /** Marks wrapguard's pull request comment so later runs update it instead of adding another. */
@@ -22,12 +24,7 @@ export const color = {
 
 export function formatReport(diff: DiffResult, options: ReportOptions & { verbose: boolean }): string {
   const out: string[] = [];
-  out.push(
-    color.dim(
-      `Checked ${plural(options.pages, "page")} at ${plural(options.widths, "width")}, ${plural(diff.elementCount, "text element")}.`,
-    ),
-    "",
-  );
+  out.push(color.dim(checkedLine(diff, options)), "");
 
   const byPage = groupBy(diff.changed, (change) => change.page);
   for (const [page, changes] of byPage) {
@@ -40,6 +37,8 @@ export function formatReport(diff: DiffResult, options: ReportOptions & { verbos
     }
     out.push("");
   }
+
+  if (diff.overLimit.length) out.push(...formatLimits(diff.overLimit), "");
 
   if (options.verbose) {
     section(out, "New text", diff.added);
@@ -70,44 +69,100 @@ export function formatReport(diff: DiffResult, options: ReportOptions & { verbos
   }
 
   if (diff.changed.length) {
-    const changes = diff.changed.length;
     out.push(
-      color.red(`✗ ${plural(changes, "piece")} of text now wrap${changes === 1 ? "s" : ""} differently on ${plural(byPage.size, "page")}.`),
+      color.red(`✗ ${wrapChangesSentence(diff.changed.length)} on ${plural(byPage.size, "page")}.`),
       color.dim("  If that's intended, run: wrapguard update"),
     );
-  } else if (hasFailures(diff, options.strict ?? false)) {
-    out.push(color.red("✗ No wrapping changes, but text or pages were added or removed (--strict)."));
-  } else {
-    out.push(color.green("✓ No wrapping changes."));
+  }
+  if (diff.overLimit.length) {
+    out.push(
+      color.red(`✗ ${overLimitSentence(diff.overLimit.length)}.`),
+      color.dim("  Shorten the text, give it more room, or change the rule."),
+    );
+  }
+  if (!diff.changed.length && !diff.overLimit.length) {
+    if (hasFailures(diff, options.strict ?? false)) {
+      out.push(color.red("✗ No wrapping changes, but text or pages were added or removed (--strict)."));
+    } else {
+      out.push(color.green(`✓ ${passSentence(diff, options)}`));
+    }
   }
   return out.join("\n");
 }
 
+/** Text over its line limit, grouped by rule. */
+export function formatLimits(overLimit: LimitViolation[]): string[] {
+  const out = [color.bold("Line limits")];
+  for (const [rule, violations] of groupBy(overLimit, ruleLabel)) {
+    out.push(`  ${rule}`);
+    for (const violation of violations) {
+      const widths = violation.widths
+        .map(({ width, lines }) => `${width}px ${color.red(String(lines))}`)
+        .join(color.dim("  ·  "));
+      out.push(`    ${violation.page}  ${label(violation.key, violation.text)}`, `      ${widths} ${color.dim("lines")}`);
+    }
+  }
+  return out;
+}
+
+function checkedLine(diff: DiffResult, options: ReportOptions): string {
+  const checked = `Checked ${plural(options.pages, "page")} at ${plural(options.widths, "width")}, ${plural(diff.elementCount, "text element")}.`;
+  return diff.hasBaseline ? checked : `${checked} No snapshot yet, so only line limits were checked.`;
+}
+
+function wrapChangesSentence(count: number): string {
+  return `${plural(count, "piece")} of text now wrap${count === 1 ? "s" : ""} differently`;
+}
+
+function overLimitSentence(count: number): string {
+  return count === 1 ? "1 piece of text goes over its line limit" : `${count} pieces of text go over their line limit`;
+}
+
+function passSentence(diff: DiffResult, options: ReportOptions): string {
+  if (!diff.hasBaseline) return "All text is within its line limits.";
+  return options.rules ? "No wrapping changes, and all text is within its line limits." : "No wrapping changes.";
+}
+
+function ruleLabel(violation: LimitViolation): string {
+  return `${violation.selector}  max ${plural(violation.maxLines, "line")}`;
+}
+
 /** The same result as Markdown, for pull request comments and CI job summaries. */
 export function formatMarkdown(diff: DiffResult, options: ReportOptions): string {
-  const checked = `Checked ${plural(options.pages, "page")} at ${plural(options.widths, "width")}, ${plural(diff.elementCount, "text element")}.`;
+  const checked = checkedLine(diff, options);
   const out = [COMMENT_MARKER];
+  const problems = [
+    diff.changed.length ? wrapChangesSentence(diff.changed.length) : "",
+    diff.overLimit.length ? overLimitSentence(diff.overLimit.length) : "",
+  ].filter(Boolean);
+
+  if (problems.length) {
+    out.push(`### ✗ ${problems.join(" · ")}`, "", checked);
+  } else if (hasFailures(diff, options.strict ?? false)) {
+    out.push("### ✗ No wrapping changes, but text or pages were added or removed", "", `${checked} Strict mode is on.`);
+  } else {
+    out.push(`### ✓ ${passSentence(diff, options).replace(/\.$/, "")}`, "", checked);
+  }
 
   if (diff.changed.length) {
-    const changes = diff.changed.length;
-    out.push(
-      `### ✗ ${plural(changes, "piece")} of text now wrap${changes === 1 ? "s" : ""} differently`,
-      "",
-      checked,
-      "",
-      "| Page | Element | Text | Lines |",
-      "| --- | --- | --- | --- |",
-    );
+    out.push("", "**Wrapping changes**", "", "| Page | Element | Text | Lines |", "| --- | --- | --- | --- |");
     for (const change of diff.changed.slice(0, MAX_ROWS)) {
       const lines = change.changes.map(({ width, before, after }) => `${width}px ${before} → **${after}**`).join("<br>");
       out.push(`| ${code(change.page)} | ${code(change.key)} | ${markdownText(change.text)} | ${lines} |`);
     }
-    if (changes > MAX_ROWS) out.push("", `…and ${changes - MAX_ROWS} more. The job log lists them all.`);
+    if (diff.changed.length > MAX_ROWS) out.push("", `…and ${diff.changed.length - MAX_ROWS} more. The job log lists them all.`);
     out.push("", "If these are intended, run `npx wrapguard update` and commit the snapshot.");
-  } else if (hasFailures(diff, options.strict ?? false)) {
-    out.push("### ✗ No wrapping changes, but text or pages were added or removed", "", `${checked} Strict mode is on.`);
-  } else {
-    out.push("### ✓ No wrapping changes", "", checked);
+  }
+
+  if (diff.overLimit.length) {
+    out.push("", "**Line limits**", "", "| Rule | Page | Element | Text | Lines |", "| --- | --- | --- | --- | --- |");
+    for (const violation of diff.overLimit.slice(0, MAX_ROWS)) {
+      const lines = violation.widths.map(({ width, lines }) => `${width}px **${lines}**`).join("<br>");
+      const rule = `${code(violation.selector)} max ${violation.maxLines}`;
+      out.push(`| ${rule} | ${code(violation.page)} | ${code(violation.key)} | ${markdownText(violation.text)} | ${lines} |`);
+    }
+    if (diff.overLimit.length > MAX_ROWS) out.push("", `…and ${diff.overLimit.length - MAX_ROWS} more. The job log lists them all.`);
+    out.push("", "Shorten the text, give it more room, or change the rule in your wrapguard config.");
   }
 
   const missing = [

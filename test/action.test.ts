@@ -17,7 +17,18 @@ const actionEntry = fileURLToPath(new URL("../src/action.ts", import.meta.url));
 const selfTest = fileURLToPath(new URL("./action/", import.meta.url));
 
 function emptyDiff(overrides: Partial<DiffResult> = {}): DiffResult {
-  return { changed: [], added: [], removed: [], textOnly: [], missingPages: [], missingWidths: [], elementCount: 3, ...overrides };
+  return {
+    hasBaseline: true,
+    changed: [],
+    overLimit: [],
+    added: [],
+    removed: [],
+    textOnly: [],
+    missingPages: [],
+    missingWidths: [],
+    elementCount: 3,
+    ...overrides,
+  };
 }
 
 describe("markdown report", () => {
@@ -48,6 +59,26 @@ describe("markdown report", () => {
     const added = emptyDiff({ added: [{ page: "/", key: "main > p", text: "New", widths: [] }] });
     assert.match(formatMarkdown(added, { pages: 1, widths: 2 }), /### ✓ No wrapping changes[\s\S]*<details><summary>Also 1 new/);
     assert.match(formatMarkdown(added, { pages: 1, widths: 2, strict: true }), /### ✗ No wrapping changes, but text or pages were added or removed/);
+  });
+
+  test("lists line limit violations next to wrap changes", () => {
+    const markdown = formatMarkdown(
+      emptyDiff({
+        changed: [{ page: "/", key: "main > p", text: "Lead", changes: [{ width: 390, before: 2, after: 3 }] }],
+        overLimit: [
+          { page: "/", key: "header > button", text: "Start free trial", selector: "button", maxLines: 1, widths: [{ width: 390, lines: 2 }] },
+        ],
+      }),
+      { pages: 1, widths: 2, rules: 1 },
+    );
+    assert.match(markdown, /### ✗ 1 piece of text now wraps differently · 1 piece of text goes over its line limit/);
+    assert.match(markdown, /\*\*Wrapping changes\*\*/);
+    assert.match(markdown, /\| `button` max 1 \| `\/` \| `header > button` \| Start free trial \| 390px \*\*2\*\* \|/);
+  });
+
+  test("says when only line limits were checked", () => {
+    const markdown = formatMarkdown(emptyDiff({ hasBaseline: false }), { pages: 1, widths: 2, rules: 2 });
+    assert.match(markdown, /### ✓ All text is within its line limits\n\nChecked 1 page at 2 widths, 3 text elements\. No snapshot yet/);
   });
 
   test("keeps long results to 50 rows", () => {

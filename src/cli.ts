@@ -5,7 +5,7 @@ import { resolve } from "node:path";
 import { parseArgs } from "node:util";
 import { CONFIG_FILES, ConfigError, DEFAULTS, loadConfig } from "./config.ts";
 import { diffSnapshots, hasFailures } from "./diff.ts";
-import { color, formatMarkdown, formatReport } from "./report.ts";
+import { color, formatLimits, formatMarkdown, formatReport } from "./report.ts";
 import { scan } from "./scan.ts";
 import { readSnapshot, writeSnapshot } from "./snapshot.ts";
 
@@ -15,6 +15,7 @@ Usage
   wrapguard init              Create wrapguard.config.json
   wrapguard update            Scan your pages and save the line counts
   wrapguard check             Scan again and fail if any text wraps differently
+                              or goes over a line limit from \`rules\`
 
 Options
   -c, --config <file>         Config file (default: wrapguard.config.{js,mjs,json})
@@ -59,25 +60,36 @@ async function main(argv: string[]): Promise<number> {
       return init(cwd);
     case "update": {
       const config = await loadConfig(cwd, values.config);
-      const snapshot = await scan(config, progress());
+      const { snapshot, overLimit } = await scan(config, progress());
       const path = resolve(config.root, config.snapshot);
       await writeSnapshot(path, snapshot);
       const count = Object.values(snapshot.pages).reduce((sum, elements) => sum + elements.length, 0);
       console.log(color.green(`✓ Saved ${count} text elements from ${config.pages.length} page(s) to ${config.snapshot}`));
+      if (overLimit.length) {
+        // The snapshot only records line counts, so save it anyway and say what `check` will fail on.
+        console.log(
+          "",
+          ...formatLimits(overLimit),
+          "",
+          color.yellow(`⚠ ${overLimit.length} piece(s) of text go over their line limit. \`wrapguard check\` fails until they're fixed.`),
+        );
+      }
       return 0;
     }
     case "check": {
       const config = await loadConfig(cwd, values.config);
       const path = resolve(config.root, config.snapshot);
-      if (!existsSync(path)) {
+      const hasSnapshot = existsSync(path);
+      if (!hasSnapshot && !config.rules.length) {
         console.error(`No snapshot at ${config.snapshot} yet. Run \`wrapguard update\` first and commit the file.`);
         return 2;
       }
-      const baseline = await readSnapshot(path);
+      // With rules but no snapshot yet, check the line limits on their own.
+      const baseline = hasSnapshot ? await readSnapshot(path) : undefined;
       const plain = values.json || values.markdown;
       const current = await scan(config, plain ? undefined : progress());
-      const diff = diffSnapshots(baseline, current);
-      const size = { pages: config.pages.length, widths: config.widths.length, strict: values.strict };
+      const diff = diffSnapshots(baseline, current.snapshot, current.overLimit);
+      const size = { pages: config.pages.length, widths: config.widths.length, strict: values.strict, rules: config.rules.length };
       if (values.json) console.log(JSON.stringify(diff, null, 2));
       else if (values.markdown) console.log(formatMarkdown(diff, size));
       else console.log(formatReport(diff, { ...size, verbose: values.verbose }));
