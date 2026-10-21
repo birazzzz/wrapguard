@@ -16,10 +16,12 @@ export { scan, type ScanProgress, type ScanResult } from "./scan.ts";
 export {
   diffSnapshots,
   hasFailures,
+  pairElements,
   type DiffResult,
   type ElementChange,
   type WidthChange,
   type LimitViolation,
+  type MovedElement,
 } from "./diff.ts";
 export { readSnapshot, writeSnapshot, serializeSnapshot, type Snapshot, type SnapshotElement } from "./snapshot.ts";
 export { measureInPage, type MeasureOptions, type MeasuredElement } from "./measure.ts";
