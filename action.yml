@@ -22,7 +22,7 @@ inputs:
     description: Also fail on new or missing text and pages.
     default: "false"
   github-token:
-    description: Token used to comment. Needs `pull-requests: write`.
+    description: "Token used to comment. Needs `pull-requests: write`."
     default: ${{ github.token }}
 
 outputs:
