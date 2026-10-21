@@ -42,7 +42,7 @@
     "build": "tsc -p tsconfig.build.json",
     "typecheck": "tsc --noEmit",
     "test": "node --test test/*.test.ts",
-    "prepublishOnly": "pnpm run build"
+    "prepare": "tsc -p tsconfig.build.json"
   },
   "dependencies": {
     "playwright": "^1.56.1"
