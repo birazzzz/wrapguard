@@ -57,6 +57,8 @@ jobs:
       - uses: actions/setup-node@v5
         with:
           node-version: 22
+          # The action installs with npm; without this, setup-node reads `packageManager` and looks for pnpm.
+          package-manager-cache: false
 
       - name: Serve the test page
         run: python3 -m http.server 8080 --directory test/action > /dev/null 2>&1 &
