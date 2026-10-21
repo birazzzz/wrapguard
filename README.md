@@ -1,19 +1,26 @@
 # wrapguard
 
+[![CI](https://github.com/birazzzz/wrapguard/actions/workflows/ci.yml/badge.svg)](https://github.com/birazzzz/wrapguard/actions/workflows/ci.yml)
+
 Catch text that starts wrapping onto more lines, before it ships.
 
-Someone edits a headline, a translation runs 30% longer, a font update shifts a few pixels, and now your hero title takes three lines on phones and a button label breaks in two. Screenshot tests catch that, along with a hundred one-pixel shifts nobody cares about. wrapguard checks one thing: **how many lines each piece of text takes, at each screen width.**
+Someone edits a headline, a translation runs longer, a font update shifts a few pixels, and now your hero title takes three lines on phones and a button label breaks in two. Screenshot tests catch that, along with a hundred one-pixel shifts nobody cares about. wrapguard checks one thing: **how many lines each piece of text takes, at each screen width.**
+
+Here is a real run. We lengthened the last sentence of the [fynepdf.com](https://fynepdf.com) hero from "Start free, no signup." to "Start free today, no signup or credit card needed." and ran `wrapguard check`:
 
 ```
-/pricing
-  main > section[2] > h1  "Simple pricing for every team"
-    390px 2 → 3 lines
-  main > section[3] > a  "Start free trial"
-    768px 1 → 2 lines
+Checked 1 page at 4 widths, 188 text elements.
 
-✗ 2 pieces of text now wrap differently on 1 page.
+/
+  main > section > p  "Edit by hand or prompt, review with 15 specialist agents an…"
+    768px 1 → 2  ·  390px 2 → 3 lines
+
+Also 1 new, 0 gone, 0 with new copy at the same line count (--verbose lists them).
+✗ 1 piece of text now wraps differently on 1 page.
   If that's intended, run: wrapguard update
 ```
+
+The longer sentence still fits on a laptop, but adds a line on tablets and phones. (The "1 new" is a chat demo further down the page that types its messages on a timer. See [Limits](#limits).)
 
 ## How it works
 
@@ -24,11 +31,23 @@ Someone edits a headline, a translation runs 30% longer, a font update shifts a 
 
 The snapshot has one line per element, so a pull request that changes it shows exactly what moved.
 
+## Install
+
+> wrapguard isn't on npm yet. Until the first release, install it from GitHub:
+
+```bash
+npm install --save-dev github:birazzzz/wrapguard
+```
+
+```bash
+npx playwright install chromium
+```
+
+It needs Node 20 or newer.
+
 ## Quick start
 
 ```bash
-npm install --save-dev wrapguard
-npx playwright install chromium
 npx wrapguard init
 ```
 
@@ -42,12 +61,58 @@ Edit `wrapguard.config.json`:
 }
 ```
 
-Start your site, then:
+Start your site, then save the baseline and commit `wrapguard.snap.json`:
 
 ```bash
-npx wrapguard update   # save the baseline
-npx wrapguard check    # compare against it (exit code 1 on changes)
+npx wrapguard update
 ```
+
+From then on, compare against it. The exit code is 1 when any text wraps differently:
+
+```bash
+npx wrapguard check
+```
+
+## Run it in CI
+
+A GitHub Actions job that builds your site, starts it and checks it on every pull request:
+
+```yaml
+name: wrapguard
+on: pull_request
+
+jobs:
+  wrapguard:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - run: npm run build
+      - name: Start the site
+        run: npm start &
+      - name: Wait for it
+        run: curl --retry 30 --retry-delay 1 --retry-connrefused -sf http://localhost:3000 > /dev/null
+      - run: npx wrapguard check
+```
+
+Change `npm start` and the port to whatever serves your built site. When a change is intended, run `npx wrapguard update` and commit the new snapshot with it.
+
+## Screenshot tests or wrapguard?
+
+|                     | Screenshot tests                                  | wrapguard                                  |
+| ------------------- | ------------------------------------------------- | ------------------------------------------ |
+| Compares            | Pixels                                            | Line counts per element                    |
+| Fails on            | Any visual change, including anti-aliasing and 1px shifts | A piece of text taking more or fewer lines |
+| Reviewing a failure | Look at image diffs                               | Read a text diff                           |
+| Baseline            | An image per page and width                       | One JSON file                              |
+| Catches             | Colours, spacing, images, everything visible      | Text wrapping only                         |
+
+They do different jobs. Keep screenshot tests for visual design and use wrapguard for copy, so editing a sentence doesn't mean reviewing forty screenshots.
 
 ## Config
 
@@ -89,9 +154,19 @@ wrapguard check             Scan again and fail if any text wraps differently
   --json                    Print the result as JSON
 ```
 
+## Limits
+
+- **Chromium only.** Firefox and Safari can break lines in slightly different places.
+- **HTML text only.** Text drawn in a canvas, SVG `<text>` and text inside images aren't measured.
+- **Clipped text counts the lines it needs, not the lines you see.** With `line-clamp: 2` or a fixed height and `overflow: hidden`, a paragraph that needs 3 lines counts as 3. A change is still caught. Single-line `text-overflow: ellipsis` counts as 1.
+- **Only what's on the page when it loads.** Menus, tabs and dialogs aren't opened, and content that loads on scroll isn't reached.
+- **Text on a timer** (chat demos, carousels, rotating words) can be there in one run and not the next. It shows up as new or gone, which only fails `check` with `--strict`. Mark it `data-wrapguard-ignore`.
+- **No pages behind a sign-in yet.**
+- **Names follow page structure.** Moving an element to another section shows as gone and new, not as changed. Give important text a `data-wrapguard` name to avoid that.
+
 ## Tips
 
-- **Make the baseline where fonts match.** Web fonts measure the same everywhere. If your site falls back to system fonts, Windows, macOS and Linux will wrap differently, so make the baseline in CI.
+- **Make the baseline where fonts match.** Web fonts usually measure the same on every system. If your site falls back to system fonts, Windows, macOS and Linux wrap differently, so make the baseline on the same system as CI.
 - **Animations** are turned off with `prefers-reduced-motion`. Text that types itself in still needs `settle`.
 
 ## Status
