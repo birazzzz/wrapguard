@@ -1,0 +1,78 @@
+# Publishes to npm when a GitHub release is published. No npm token is stored anywhere:
+# npm trusts this workflow file through OIDC ("trusted publishing", set up once on
+# npmjs.com), and every version gets a provenance badge linking it to this commit.
+#
+# The version is staged, not published: it becomes installable when a maintainer
+# approves it on npmjs.com (Staged Packages, with 2FA). See RELEASING.md.
+#
+# Run it by hand (Actions → Release → Run workflow) for a dry run that tests and builds
+# the package without publishing anything.
+name: Release
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+
+permissions:
+  contents: write # move the major tag (v0) to the release
+  id-token: write # npm trusted publishing
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    # Trusted publishing only works on GitHub's own runners.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Release tag matches package.json
+        if: github.event_name == 'release'
+        run: |
+          version=$(node -p "require('./package.json').version")
+          if [ "${GITHUB_REF_NAME}" != "v${version}" ]; then
+            echo "::error::The release tag is ${GITHUB_REF_NAME}, but package.json says ${version}. Bump the version in a pull request first, then tag v${version}."
+            exit 1
+          fi
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v5
+        with:
+          # Trusted publishing needs Node 22.14+ and npm 11.5.1+; staging needs npm 11.15+.
+          node-version: 24
+          registry-url: https://registry.npmjs.org
+          cache: pnpm
+
+      - name: Update npm
+        run: npm install -g npm@^11.15.0
+
+      - run: pnpm install --frozen-lockfile
+
+      - run: pnpm run typecheck
+
+      - name: Install Chromium
+        run: pnpm exec playwright install --with-deps chromium
+
+      - run: pnpm test
+
+      - name: Stage on npm
+        if: github.event_name == 'release'
+        run: npm stage publish
+
+      # `npm publish --dry-run` refuses a version that is already on npm, which is always
+      # true between releases, so the dry run builds and lists the package instead.
+      - name: Dry run
+        if: github.event_name == 'workflow_dispatch'
+        run: npm pack --dry-run
+
+      - name: Point the major tag at this release
+        if: github.event_name == 'release'
+        run: |
+          major="v$(node -p "require('./package.json').version.split('.')[0]")"
+          git tag -f "${major}" "${GITHUB_SHA}"
+          git push -f origin "refs/tags/${major}"
+          echo "Moved ${major} to ${GITHUB_REF_NAME}."
