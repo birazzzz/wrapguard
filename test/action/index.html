@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>wrapguard action self-test</title>
+    <style>
+      /* Monospace + ch widths, so the saved snapshot matches on any OS. */
+      body { margin: 0; font: 16px/1.5 monospace; }
+      main > * { width: 20ch; margin: 0; }
+      @media (max-width: 500px) { main > * { width: 10ch; } }
+      button { font: inherit; padding: 0; border: 0; background: none; text-align: left; }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1 data-wrapguard="title">Short title</h1>
+      <p data-wrapguard="lead">aaaa bbbb cccc dddd eeee</p>
+      <button data-wrapguard="cta">Start now</button>
+    </main>
+  </body>
+</html>

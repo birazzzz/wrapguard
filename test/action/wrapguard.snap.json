@@ -1,0 +1,11 @@
+{
+  "version": 1,
+  "widths": [800,400],
+  "pages": {
+    "/": [
+      { "key": "title", "text": "Short title", "lines": { "800": 1, "400": 2 } },
+      { "key": "lead", "text": "aaaa bbbb cccc dddd eeee", "lines": { "800": 2, "400": 3 } },
+      { "key": "cta", "text": "Start now", "lines": { "800": 1, "400": 1 } }
+    ]
+  }
+}
