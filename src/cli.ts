@@ -70,10 +70,12 @@ async function main(argv: string[]): Promise<number> {
         if (overLimit.length) {
           // The snapshot only records line counts, so save it anyway and say what `check` will fail on.
           console.log(
-            "",
-            ...formatLimits(overLimit),
-            "",
-            color.yellow(`⚠ ${overLimit.length} piece(s) of text go over their line limit. \`wrapguard check\` fails until they're fixed.`),
+            [
+              "",
+              ...formatLimits(overLimit),
+              "",
+              color.yellow(`⚠ ${overLimit.length} piece(s) of text go over their line limit. \`wrapguard check\` fails until they're fixed.`),
+            ].join("\n"),
           );
         }
         return 0;
