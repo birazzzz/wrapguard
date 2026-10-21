@@ -60,9 +60,7 @@ jobs:
           # The action installs with npm; without this, setup-node reads `packageManager` and looks for pnpm.
           package-manager-cache: false
 
-      - name: Serve the test page
-        run: python3 -m http.server 8080 --directory test/action > /dev/null 2>&1 &
-
+      # test/action's config starts the test page itself with `server`.
       - name: Run this repository's action
         id: wrapguard
         uses: ./
@@ -71,3 +69,6 @@ jobs:
 
       - name: Expect no wrapping changes
         run: test "${{ steps.wrapguard.outputs.changed }}" = "0"
+
+      - name: Expect the test server to be stopped
+        run: "! curl -s --max-time 2 http://127.0.0.1:8080/ > /dev/null"

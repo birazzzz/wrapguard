@@ -1,5 +1,6 @@
 {
-  "baseUrl": "http://localhost:8080",
+  "baseUrl": "http://127.0.0.1:8080",
   "pages": ["/"],
-  "widths": [800, 400]
+  "widths": [800, 400],
+  "server": { "command": "python3 -m http.server 8080 --bind 127.0.0.1" }
 }

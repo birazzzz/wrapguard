@@ -7,6 +7,7 @@ import { diffSnapshots, hasFailures, type DiffResult } from "./diff.ts";
 import { GitHubError, upsertComment } from "./github.ts";
 import { formatMarkdown, formatReport } from "./report.ts";
 import { scan } from "./scan.ts";
+import { withSite } from "./site.ts";
 import { readSnapshot } from "./snapshot.ts";
 
 const input = (name: string) => (process.env[`INPUT_${name}`] ?? "").trim();
@@ -25,10 +26,14 @@ async function main(): Promise<number> {
   }
 
   const baseline = hasSnapshot ? await readSnapshot(snapshotPath) : undefined;
-  const current = await scan(config);
+  // The server, when configured, only runs for the scan.
+  const { current, pages } = await withSite(config, console.log, async (site) => ({
+    current: await scan(site),
+    pages: site.pages.length,
+  }));
   const diff = diffSnapshots(baseline, current.snapshot, current.overLimit);
   const failing = hasFailures(diff, strict);
-  const size = { pages: config.pages.length, widths: config.widths.length, strict, rules: config.rules.length };
+  const size = { pages, widths: config.widths.length, strict, rules: config.rules.length };
   console.log(formatReport(diff, { ...size, verbose: true }));
 
   const markdown = formatMarkdown(diff, size);

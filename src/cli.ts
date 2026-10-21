@@ -7,6 +7,7 @@ import { CONFIG_FILES, ConfigError, DEFAULTS, loadConfig } from "./config.ts";
 import { diffSnapshots, hasFailures } from "./diff.ts";
 import { color, formatLimits, formatMarkdown, formatReport } from "./report.ts";
 import { scan } from "./scan.ts";
+import { withSite } from "./site.ts";
 import { readSnapshot, writeSnapshot } from "./snapshot.ts";
 
 const HELP = `wrapguard: catch text that starts wrapping onto more lines.
@@ -59,41 +60,45 @@ async function main(argv: string[]): Promise<number> {
     case "init":
       return init(cwd);
     case "update": {
-      const config = await loadConfig(cwd, values.config);
-      const { snapshot, overLimit } = await scan(config, progress());
-      const path = resolve(config.root, config.snapshot);
-      await writeSnapshot(path, snapshot);
-      const count = Object.values(snapshot.pages).reduce((sum, elements) => sum + elements.length, 0);
-      console.log(color.green(`✓ Saved ${count} text elements from ${config.pages.length} page(s) to ${config.snapshot}`));
-      if (overLimit.length) {
-        // The snapshot only records line counts, so save it anyway and say what `check` will fail on.
-        console.log(
-          "",
-          ...formatLimits(overLimit),
-          "",
-          color.yellow(`⚠ ${overLimit.length} piece(s) of text go over their line limit. \`wrapguard check\` fails until they're fixed.`),
-        );
-      }
-      return 0;
+      const loaded = await loadConfig(cwd, values.config);
+      return withSite(loaded, log, async (config) => {
+        const { snapshot, overLimit } = await scan(config, progress());
+        const path = resolve(config.root, config.snapshot);
+        await writeSnapshot(path, snapshot);
+        const count = Object.values(snapshot.pages).reduce((sum, elements) => sum + elements.length, 0);
+        console.log(color.green(`✓ Saved ${count} text elements from ${config.pages.length} page(s) to ${config.snapshot}`));
+        if (overLimit.length) {
+          // The snapshot only records line counts, so save it anyway and say what `check` will fail on.
+          console.log(
+            "",
+            ...formatLimits(overLimit),
+            "",
+            color.yellow(`⚠ ${overLimit.length} piece(s) of text go over their line limit. \`wrapguard check\` fails until they're fixed.`),
+          );
+        }
+        return 0;
+      });
     }
     case "check": {
-      const config = await loadConfig(cwd, values.config);
-      const path = resolve(config.root, config.snapshot);
+      const loaded = await loadConfig(cwd, values.config);
+      const path = resolve(loaded.root, loaded.snapshot);
       const hasSnapshot = existsSync(path);
-      if (!hasSnapshot && !config.rules.length) {
-        console.error(`No snapshot at ${config.snapshot} yet. Run \`wrapguard update\` first and commit the file.`);
+      if (!hasSnapshot && !loaded.rules.length) {
+        console.error(`No snapshot at ${loaded.snapshot} yet. Run \`wrapguard update\` first and commit the file.`);
         return 2;
       }
       // With rules but no snapshot yet, check the line limits on their own.
       const baseline = hasSnapshot ? await readSnapshot(path) : undefined;
       const plain = values.json || values.markdown;
-      const current = await scan(config, plain ? undefined : progress());
-      const diff = diffSnapshots(baseline, current.snapshot, current.overLimit);
-      const size = { pages: config.pages.length, widths: config.widths.length, strict: values.strict, rules: config.rules.length };
-      if (values.json) console.log(JSON.stringify(diff, null, 2));
-      else if (values.markdown) console.log(formatMarkdown(diff, size));
-      else console.log(formatReport(diff, { ...size, verbose: values.verbose }));
-      return hasFailures(diff, values.strict) ? 1 : 0;
+      return withSite(loaded, log, async (config) => {
+        const current = await scan(config, plain ? undefined : progress());
+        const diff = diffSnapshots(baseline, current.snapshot, current.overLimit);
+        const size = { pages: config.pages.length, widths: config.widths.length, strict: values.strict, rules: config.rules.length };
+        if (values.json) console.log(JSON.stringify(diff, null, 2));
+        else if (values.markdown) console.log(formatMarkdown(diff, size));
+        else console.log(formatReport(diff, { ...size, verbose: values.verbose }));
+        return hasFailures(diff, values.strict) ? 1 : 0;
+      });
     }
     default:
       console.error(`Unknown command: ${command}\n\n${HELP}`);
@@ -120,6 +125,11 @@ async function init(cwd: string): Promise<number> {
     ].join("\n"),
   );
   return 0;
+}
+
+// Status goes to stderr so `--json` and `--markdown` output stays clean.
+function log(message: string) {
+  console.error(color.dim(message));
 }
 
 function progress() {

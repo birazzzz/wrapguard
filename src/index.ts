@@ -6,7 +6,12 @@ export {
   type WrapguardConfig,
   type ResolvedConfig,
   type LineRule,
+  type SitemapOptions,
+  type ServerOptions,
 } from "./config.ts";
+export { pagesFromSitemap } from "./sitemap.ts";
+export { startServer, isUp, type RunningServer } from "./server.ts";
+export { withSite, resolvePages } from "./site.ts";
 export { scan, type ScanProgress, type ScanResult } from "./scan.ts";
 export {
   diffSnapshots,
