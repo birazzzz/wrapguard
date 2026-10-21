@@ -50,6 +50,13 @@ export function formatReport(diff: DiffResult, options: ReportOptions & { verbos
       }
       out.push("");
     }
+    if (diff.moved.length) {
+      out.push(color.bold("Moved, same text"));
+      for (const move of diff.moved) {
+        out.push(`  ${move.page}  ${move.from} → ${move.to}  ${color.dim(quote(move.text))}`);
+      }
+      out.push("");
+    }
   }
 
   if (diff.missingPages.length) {
@@ -59,11 +66,11 @@ export function formatReport(diff: DiffResult, options: ReportOptions & { verbos
     out.push(color.yellow(`No baseline yet at: ${diff.missingWidths.map((width) => `${width}px`).join(", ")}`));
   }
 
-  const quiet = diff.added.length + diff.removed.length + diff.textOnly.length;
+  const quiet = diff.added.length + diff.removed.length + diff.textOnly.length + diff.moved.length;
   if (quiet && !options.verbose) {
     out.push(
       color.dim(
-        `Also ${diff.added.length} new, ${diff.removed.length} gone, ${diff.textOnly.length} with new copy at the same line count (--verbose lists them).`,
+        `Also ${diff.added.length} new, ${diff.removed.length} gone, ${movedPart(diff)}${diff.textOnly.length} with new copy at the same line count (--verbose lists them).`,
       ),
     );
   }
@@ -103,6 +110,11 @@ export function formatLimits(overLimit: LimitViolation[]): string[] {
     }
   }
   return out;
+}
+
+// Only mentioned when something moved, so reports without moves read as before.
+function movedPart(diff: DiffResult): string {
+  return diff.moved.length ? `${diff.moved.length} moved, ` : "";
 }
 
 function checkedLine(diff: DiffResult, options: ReportOptions): string {
@@ -180,10 +192,17 @@ export function formatMarkdown(diff: DiffResult, options: ReportOptions): string
       details.push(`- ${code(change.page)} ${code(change.key)}: ${markdownText(change.before)} → ${markdownText(change.after)}`);
     }
   }
+  if (diff.moved.length) {
+    details.push("", "**Moved, same text**", "");
+    for (const move of diff.moved.slice(0, MAX_ROWS)) {
+      details.push(`- ${code(move.page)} ${code(move.from)} → ${code(move.to)}: ${markdownText(move.text)}`);
+    }
+    if (diff.moved.length > MAX_ROWS) details.push(`- …and ${diff.moved.length - MAX_ROWS} more`);
+  }
   if (details.length) {
     out.push(
       "",
-      `<details><summary>Also ${diff.added.length} new, ${diff.removed.length} gone, ${diff.textOnly.length} reworded at the same line count</summary>`,
+      `<details><summary>Also ${diff.added.length} new, ${diff.removed.length} gone, ${movedPart(diff)}${diff.textOnly.length} reworded at the same line count</summary>`,
       ...details,
       "",
       "</details>",

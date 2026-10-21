@@ -24,6 +24,7 @@ function emptyDiff(overrides: Partial<DiffResult> = {}): DiffResult {
     added: [],
     removed: [],
     textOnly: [],
+    moved: [],
     missingPages: [],
     missingWidths: [],
     elementCount: 3,

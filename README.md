@@ -241,6 +241,15 @@ Skip anything that's meant to change, like dates, counters or user names:
 <p data-wrapguard-ignore>Last updated 3 minutes ago</p>
 ```
 
+When you add or remove a section, the elements after it get new structural names. `check` still compares each one with the right saved element:
+
+1. Named elements (`data-wrapguard` or an element's own id) are matched by name.
+2. Everything else is lined up in page order by its text, the way a text diff lines up lines. A section added above others leaves them matched, and repeated text like three "Learn more" links pairs up in order.
+3. Text that moved past other content is matched by its text.
+4. Text under the same name with new words is treated as a copy edit of what was there.
+
+Text that only moved is listed under "Moved, same text" with `--verbose` and never fails the check.
+
 ## Commands
 
 ```
@@ -249,7 +258,7 @@ wrapguard update            Scan your pages and save the line counts
 wrapguard check             Scan again and fail if any text wraps differently
                             or goes over a line limit
   --strict                  Also fail on new or missing text and pages
-  --verbose                 List new, missing and reworded text too
+  --verbose                 List new, missing, moved and reworded text too
   --json                    Print the result as JSON
   --markdown                Print the result as Markdown
 ```
@@ -262,7 +271,7 @@ wrapguard check             Scan again and fail if any text wraps differently
 - **Only what's on the page when it loads.** Menus, tabs and dialogs aren't opened, and content that loads on scroll isn't reached.
 - **Text on a timer** (chat demos, carousels, rotating words) can be there in one run and not the next. It shows up as new or gone, which only fails `check` with `--strict`. Mark it `data-wrapguard-ignore`.
 - **No pages behind a sign-in yet.**
-- **Names follow page structure.** Moving an element to another section shows as gone and new, not as changed. Give important text a `data-wrapguard` name to avoid that.
+- **A copy edit plus a move can't be told apart from new text.** If text changes its words and its place in the same commit, it shows as one element gone and one new, which only fails `check` with `--strict`. Give important text a `data-wrapguard` name and it's always compared, wherever it goes.
 
 ## Tips
 

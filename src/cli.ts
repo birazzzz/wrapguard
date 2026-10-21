@@ -21,7 +21,7 @@ Usage
 Options
   -c, --config <file>         Config file (default: wrapguard.config.{js,mjs,json})
       --strict                check: also fail on new or missing text and pages
-      --verbose               check: list new, missing and reworded text too
+      --verbose               check: list new, missing, moved and reworded text too
       --json                  check: print the result as JSON
       --markdown              check: print the result as Markdown, e.g. for a CI comment
   -h, --help
