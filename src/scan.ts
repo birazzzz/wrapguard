@@ -1,4 +1,4 @@
-import { chromium, type Browser } from "playwright";
+import { chromium, type Browser, type BrowserContext } from "playwright";
 import type { ResolvedConfig } from "./config.ts";
 import type { LimitViolation } from "./diff.ts";
 import { measureInPage, type PageMeasurement } from "./measure.ts";
@@ -36,6 +36,7 @@ export async function scan(
     const worker = async () => {
       const context = await browser.newContext({ deviceScaleFactor: 1, reducedMotion: "reduce" });
       try {
+        await sendToSite(context, config);
         while (next < jobs.length) {
           const job = jobs[next++]!;
           measured.set(jobKey(job.page, job.width), await measurePage(context, config, job.page, job.width));
@@ -118,6 +119,22 @@ async function launch(): Promise<Browser> {
     }
     throw error;
   }
+}
+
+/** Sets the config's cookies and headers for the site at `baseUrl`, and nowhere else. */
+async function sendToSite(context: BrowserContext, config: ResolvedConfig): Promise<void> {
+  const { origin } = new URL(config.baseUrl);
+  const cookies = Object.entries(config.cookies).map(([name, value]) => ({ name, value, url: `${origin}/` }));
+  if (cookies.length) await context.addCookies(cookies);
+
+  const headers = Object.fromEntries(Object.entries(config.headers).map(([name, value]) => [name.toLowerCase(), value]));
+  if (!Object.keys(headers).length) return;
+  // A route instead of `extraHTTPHeaders`, which would send them to fonts, analytics and
+  // every other host too. Headers can hold a token.
+  await context.route(
+    (url) => url.origin === origin,
+    (route) => route.continue({ headers: { ...route.request().headers(), ...headers } }),
+  );
 }
 
 async function measurePage(

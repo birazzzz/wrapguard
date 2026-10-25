@@ -69,9 +69,9 @@ function decodeXml(text: string): string {
     .trim();
 }
 
-async function readText(url: string): Promise<string> {
+export async function readText(url: string, headers: Record<string, string> = {}): Promise<string> {
   if (url.startsWith("file:")) return readFile(fileURLToPath(url), "utf8");
-  const response = await fetch(url, { signal: AbortSignal.timeout(30_000) });
+  const response = await fetch(url, { headers, signal: AbortSignal.timeout(30_000) });
   if (!response.ok) throw new Error(`Couldn't read the sitemap at ${url} (${response.status}).`);
   return response.text();
 }

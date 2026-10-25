@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { execFile } from "node:child_process";
 import { copyFile, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
-import { createServer } from "node:http";
+import { createServer, type Server } from "node:http";
 import type { AddressInfo } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -9,7 +9,9 @@ import { after, before, describe, test } from "node:test";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 import { resolveConfig } from "../src/config.ts";
+import { scan } from "../src/scan.ts";
 import { isUp, startServer } from "../src/server.ts";
+import { resolvePages } from "../src/site.ts";
 import { pagesFromSitemap, pattern } from "../src/sitemap.ts";
 
 const run = promisify(execFile);
@@ -204,5 +206,77 @@ describe("cli with server and sitemap", () => {
     assert.match(checked.stdout, /Checked 2 pages at 1 width/);
     assert.match(checked.stdout, /✓ No wrapping changes/);
     assert.ok(await eventually(async () => !(await isUp(baseUrl))), "server still running after check");
+  });
+});
+
+describe("cookies and headers", () => {
+  let site: Server;
+  let elsewhere: Server;
+  let baseUrl: string;
+  // The x-variant header of every request that reached another host.
+  const elsewhereSaw: (string | undefined)[] = [];
+
+  const listen = async (server: Server) => {
+    await new Promise<void>((done) => server.listen(0, "127.0.0.1", done));
+    return `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
+  };
+
+  before(async () => {
+    elsewhere = createServer((req, res) => {
+      elsewhereSaw.push(req.headers["x-variant"] as string | undefined);
+      res.writeHead(200, { "content-type": "text/css" }).end("");
+    });
+    const elsewhereUrl = await listen(elsewhere);
+    // Its page shows what it was sent, and its sitemap needs the header.
+    site = createServer((req, res) => {
+      const variant = req.headers["x-variant"];
+      if (req.url === "/sitemap.xml") {
+        if (!variant) return res.writeHead(401).end();
+        return res.writeHead(200, { "content-type": "application/xml" }).end("<urlset><url><loc>https://example.com/pricing</loc></url></urlset>");
+      }
+      res.writeHead(200, { "content-type": "text/html" }).end(
+        `<!doctype html><link rel="stylesheet" href="${elsewhereUrl}/style.css">` +
+          `<h1>variant ${variant ?? "none"}</h1><p>cookie ${req.headers.cookie ?? "none"}</p>`,
+      );
+    });
+    baseUrl = await listen(site);
+  });
+
+  after(() => {
+    for (const server of [site, elsewhere]) {
+      server.closeAllConnections();
+      server.close();
+    }
+  });
+
+  test("sends them to your site, and the headers nowhere else", async () => {
+    const config = resolveConfig(
+      { baseUrl, pages: ["/"], widths: [800], cookies: { "hero-test": "b" }, headers: { "X-Variant": "b" } },
+      dir,
+    );
+    const { snapshot } = await scan(config);
+    assert.deepEqual(snapshot.pages["/"]!.map((element) => element.text), ["variant b", "cookie hero-test=b"]);
+    assert.ok(elsewhereSaw.length > 0, "the page's stylesheet was never requested");
+    assert.ok(elsewhereSaw.every((variant) => variant === undefined), "another host got the header");
+  });
+
+  test("reads the sitemap with them too", async () => {
+    const config = resolveConfig({ baseUrl, sitemap: "/sitemap.xml", headers: { "x-variant": "b" } }, dir);
+    assert.deepEqual(await resolvePages(config, quiet), ["/pricing"]);
+    await assert.rejects(resolvePages(resolveConfig({ baseUrl, sitemap: "/sitemap.xml" }, dir), quiet), /\(401\)/);
+  });
+
+  test("config checks them", () => {
+    const config = resolveConfig({ baseUrl, pages: ["/"] }, dir);
+    assert.deepEqual([config.cookies, config.headers], [{}, {}]);
+    assert.throws(
+      () => resolveConfig({ baseUrl, pages: ["/"], cookies: { session: undefined } }, dir),
+      /`cookies\.session` must be text, not undefined/,
+    );
+    assert.throws(() => resolveConfig({ baseUrl, pages: ["/"], headers: ["x-variant: b"] }, dir), /`headers` must map names/);
+    assert.throws(
+      () => resolveConfig({ baseUrl: "file:///site/", pages: ["/"], cookies: { "hero-test": "b" } }, dir),
+      /http:\/\/ or https:\/\//,
+    );
   });
 });

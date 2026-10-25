@@ -150,6 +150,35 @@ export default {
 };
 ```
 
+## Cookies and headers
+
+To pin an A/B test to one variant, turn on a feature flag, or get past a preview deployment's protection, give wrapguard cookies and headers to send:
+
+```json
+{
+  "baseUrl": "http://localhost:3000",
+  "pages": ["/"],
+  "cookies": { "hero-test": "b" },
+  "headers": { "x-feature-flags": "new-pricing" }
+}
+```
+
+- They only go to your site. Cookies are set for the host in `baseUrl`, and headers are only added to requests to `baseUrl`, not to fonts, analytics or other hosts.
+- Reading your sitemap sends them too.
+- To check both variants of a test, give each its own config and `snapshot`, and pick one with `--config`.
+- Keep secrets out of the JSON. Read them from environment variables in a JavaScript config:
+
+```js
+// wrapguard.config.mjs
+export default {
+  baseUrl: "https://preview.example.com",
+  pages: ["/account"],
+  cookies: { session: process.env.WRAPGUARD_SESSION },
+};
+```
+
+If the variable isn't set, wrapguard stops and names the cookie that has no value.
+
 ## Run it in CI
 
 ### GitHub Actions
@@ -217,6 +246,8 @@ They do different jobs. Keep screenshot tests for visual design and use wrapguar
 | `pages`       | required without `sitemap` | Paths or full URLs to check.                                       |
 | `sitemap`     | none                     | [Read pages from a sitemap](#pages-from-your-sitemap).               |
 | `server`      | none                     | [Start your site](#starting-your-site) before scanning.              |
+| `cookies`     | `{}`                     | [Cookies](#cookies-and-headers) set for your site.                   |
+| `headers`     | `{}`                     | [Headers](#cookies-and-headers) added to requests to your site.      |
 | `widths`      | `[1440, 1024, 768, 390]` | Viewport widths in CSS pixels.                                       |
 | `selector`    | headings, text, links…   | Elements to measure.                                                 |
 | `ignore`      | `[]`                     | Selectors to skip, on top of `data-wrapguard-ignore`.                |
@@ -261,6 +292,7 @@ wrapguard check             Scan again and fail if any text wraps differently
   --verbose                 List new, missing, moved and reworded text too
   --json                    Print the result as JSON
   --markdown                Print the result as Markdown
+  -c, --config <file>       Use this config file instead of the default
 ```
 
 ## Limits
@@ -270,7 +302,7 @@ wrapguard check             Scan again and fail if any text wraps differently
 - **Clipped text counts the lines it needs, not the lines you see.** With `line-clamp: 2` or a fixed height and `overflow: hidden`, a paragraph that needs 3 lines counts as 3. A change is still caught. Single-line `text-overflow: ellipsis` counts as 1.
 - **Only what's on the page when it loads.** Menus, tabs and dialogs aren't opened, and content that loads on scroll isn't reached.
 - **Text on a timer** (chat demos, carousels, rotating words) can be there in one run and not the next. It shows up as new or gone, which only fails `check` with `--strict`. Mark it `data-wrapguard-ignore`.
-- **No pages behind a sign-in yet.**
+- **No signing in.** wrapguard doesn't log in for you. If your site keeps the session in a cookie, put it in [`cookies`](#cookies-and-headers) to check pages behind a sign-in.
 - **A copy edit plus a move can't be told apart from new text.** If text changes its words and its place in the same commit, it shows as one element gone and one new, which only fails `check` with `--strict`. Give important text a `data-wrapguard` name and it's always compared, wherever it goes.
 
 ## Tips
