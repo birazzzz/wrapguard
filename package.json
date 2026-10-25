@@ -1,6 +1,6 @@
 {
   "name": "wrapguard",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Catch text that starts wrapping onto more lines, before it ships. Line-count snapshots for your pages at every breakpoint.",
   "keywords": [
     "responsive",
