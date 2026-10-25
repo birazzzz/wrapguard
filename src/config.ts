@@ -45,6 +45,10 @@ export interface WrapguardConfig {
   sitemap?: string | SitemapOptions;
   /** Start your site before scanning and stop it afterwards. */
   server?: ServerOptions;
+  /** Cookies set for your site before each page loads, e.g. `{ "hero-test": "b" }`. */
+  cookies?: Record<string, string>;
+  /** Headers added to every request to your site, e.g. `{ "x-variant": "b" }`. */
+  headers?: Record<string, string>;
   /** Viewport widths in CSS pixels. */
   widths?: number[];
   /** Elements whose text is measured. */
@@ -152,12 +156,20 @@ export function resolveConfig(raw: unknown, root: string): ResolvedConfig {
     }
   });
 
+  const cookies = resolveNamedValues(config.cookies, "cookies", '{ "hero-test": "b" }');
+  const headers = resolveNamedValues(config.headers, "headers", '{ "x-variant": "b" }');
+  if ((Object.keys(cookies).length || Object.keys(headers).length) && !/^https?:\/\//i.test(config.baseUrl)) {
+    throw new ConfigError("`cookies` and `headers` need a `baseUrl` that starts with http:// or https://.");
+  }
+
   return {
     root,
     baseUrl: config.baseUrl,
     pages,
     sitemap,
     server: resolveServer(config.server, config.baseUrl),
+    cookies,
+    headers,
     widths: [...new Set(widths)].sort((a, b) => b - a),
     selector: config.selector ?? DEFAULTS.selector,
     ignore: config.ignore ?? DEFAULTS.ignore,
@@ -183,6 +195,17 @@ function resolveSitemap(raw: WrapguardConfig["sitemap"]): SitemapOptions | undef
     throw new ConfigError("`sitemap.limit` must be a whole number of at least 1.");
   }
   return sitemap;
+}
+
+function resolveNamedValues(raw: unknown, name: "cookies" | "headers", example: string): Record<string, string> {
+  if (raw === undefined) return {};
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
+    throw new ConfigError(`\`${name}\` must map names to values, e.g. ${example}.`);
+  }
+  for (const [key, value] of Object.entries(raw)) {
+    if (typeof value !== "string") throw new ConfigError(`\`${name}.${key}\` must be text, not ${typeof value}.`);
+  }
+  return raw as Record<string, string>;
 }
 
 function resolveServer(raw: ServerOptions | undefined, baseUrl: string): ResolvedConfig["server"] {
