@@ -312,7 +312,7 @@ wrapguard check             Scan again and fail if any text wraps differently
 
 ## Status
 
-0.1, so early. Bug reports and ideas are welcome in [issues](https://github.com/birazzzz/wrapguard/issues), especially pages where wrapguard counts lines differently from what you see.
+Early days. Bug reports and ideas are welcome in [issues](https://github.com/birazzzz/wrapguard/issues), especially pages where wrapguard counts lines differently from what you see.
 
 ---
 
