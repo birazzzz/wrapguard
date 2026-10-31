@@ -209,7 +209,7 @@ export function formatMarkdown(diff: DiffResult, options: ReportOptions): string
     );
   }
 
-  out.push("", "<sub>Checked by [wrapguard](https://github.com/birazzzz/wrapguard)</sub>", "");
+  out.push("", "<sub>Checked by [wrapguard](https://github.com/fynepdf/wrapguard)</sub>", "");
   return out.join("\n");
 }
 

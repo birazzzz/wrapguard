@@ -1,7 +1,7 @@
 # wrapguard
 
 [![npm](https://img.shields.io/npm/v/wrapguard)](https://www.npmjs.com/package/wrapguard)
-[![CI](https://github.com/birazzzz/wrapguard/actions/workflows/ci.yml/badge.svg)](https://github.com/birazzzz/wrapguard/actions/workflows/ci.yml)
+[![CI](https://github.com/fynepdf/wrapguard/actions/workflows/ci.yml/badge.svg)](https://github.com/fynepdf/wrapguard/actions/workflows/ci.yml)
 
 Catch text that starts wrapping onto more lines, before it ships.
 
@@ -9,7 +9,7 @@ Someone edits a headline, a translation runs longer, a font update shifts a few 
 
 Here is a real run. We lengthened the last sentence of the [fynepdf.com](https://fynepdf.com) hero from "Start free, no signup." to "Start free today, no signup or credit card needed." and ran `wrapguard check`:
 
-<img src="https://raw.githubusercontent.com/birazzzz/wrapguard/main/docs/demo.svg" width="726" alt="wrapguard check on fynepdf.com: main > section > p went from 1 to 2 lines at 768px and from 2 to 3 lines at 390px, so 1 piece of text now wraps differently on 1 page.">
+<img src="https://raw.githubusercontent.com/fynepdf/wrapguard/main/docs/demo.svg" width="726" alt="wrapguard check on fynepdf.com: main > section > p went from 1 to 2 lines at 768px and from 2 to 3 lines at 390px, so 1 piece of text now wraps differently on 1 page.">
 
 The longer sentence still fits on a laptop, but adds a line on tablets and phones. (The "1 new" is a chat demo further down the page that types its messages on a timer. See [Limits](#limits).)
 
@@ -204,7 +204,7 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run build
-      - uses: birazzzz/wrapguard@v0
+      - uses: fynepdf/wrapguard@v0
 ```
 
 This expects a [`server`](#starting-your-site) in your config, such as `"command": "npm start"`, so the action starts your built site itself. Without one, start the site in an earlier step (`npm start &`) and wait for it to answer. The action installs wrapguard and Chromium itself. When a change is intended, run `npx wrapguard update` locally and commit the new snapshot with it.
@@ -312,7 +312,7 @@ wrapguard check             Scan again and fail if any text wraps differently
 
 ## Status
 
-Early days. Bug reports and ideas are welcome in [issues](https://github.com/birazzzz/wrapguard/issues), especially pages where wrapguard counts lines differently from what you see.
+Early days. Bug reports and ideas are welcome in [issues](https://github.com/fynepdf/wrapguard/issues), especially pages where wrapguard counts lines differently from what you see.
 
 ---
 
