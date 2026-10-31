@@ -1,6 +1,6 @@
 # Releasing
 
-Releases go out from GitHub, not from a laptop. Publishing a GitHub release runs [`.github/workflows/release.yml`](.github/workflows/release.yml), which tests the code, stages the version on npm through **trusted publishing** (no npm token anywhere), and moves the major tag (`v0`) that people use in `uses: birazzzz/wrapguard@v0`. A maintainer then approves the staged version on npmjs.com.
+Releases go out from GitHub, not from a laptop. Publishing a GitHub release runs [`.github/workflows/release.yml`](.github/workflows/release.yml), which tests the code, stages the version on npm through **trusted publishing** (no npm token anywhere), and moves the major tag (`v0`) that people use in `uses: fynepdf/wrapguard@v0`. A maintainer then approves the staged version on npmjs.com.
 
 ## Each release
 
@@ -39,7 +39,7 @@ Trusted publishing is set per package, and the package has to exist first.
 3. **Add the trusted publisher from the command line.** It says plainly whether it worked, which the website form didn't (for wrapguard, the form never saved). `npm trust` needs a newer npm than the one on this computer, so run it through `npx`, signed in with `npm login` first:
 
    ```bash
-   npx -y npm@11 trust github wrapguard --file release.yml --repository birazzzz/wrapguard --allow-stage-publish
+   npx -y npm@11 trust github wrapguard --file release.yml --repository fynepdf/wrapguard --allow-stage-publish
    ```
 
    It asks for your two-factor login, then prints `Trust configuration created successfully`. Check what npm stored:
@@ -52,6 +52,10 @@ Trusted publishing is set per package, and the package has to exist first.
 
    The website route is npmjs.com → the package → Settings → Trusted Publisher → GitHub Actions, with the same values and both "Allow npm publish" and "Allow npm dist-tag" unchecked. When it works, the section lists the repository and workflow instead of only the publisher buttons.
 4. **After the first release through the workflow works**, lock the package to it: Settings → Publishing access → "Require two-factor authentication and disallow bypass 2fa tokens". Trusted publishing keeps working; tokens stop.
+
+### If the repository moves
+
+A trusted publisher names the GitHub owner and repository, and npm can't change one: add a new one with the step 3 command and the new `--repository` (a package holds up to 10, so the old one can stay). A new trusted publisher expires if no publish uses it within 2 days, so add it right before a release. Point `repository`, `homepage` and `bugs` in package.json at the new place too: npm refuses a publish from GitHub whose `repository.url` names another repository. (wrapguard moved from `birazzzz` to `fynepdf` in October 2026; GitHub redirects the old links.)
 
 ## Launching another open-source package
 

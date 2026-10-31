@@ -1,6 +1,6 @@
 {
   "name": "wrapguard",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "Catch text that starts wrapping onto more lines, before it ships. Line-count snapshots for your pages at every breakpoint.",
   "keywords": [
     "responsive",
@@ -12,12 +12,12 @@
     "visual-regression",
     "ci"
   ],
-  "homepage": "https://github.com/birazzzz/wrapguard#readme",
+  "homepage": "https://github.com/fynepdf/wrapguard#readme",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/birazzzz/wrapguard.git"
+    "url": "git+https://github.com/fynepdf/wrapguard.git"
   },
-  "bugs": "https://github.com/birazzzz/wrapguard/issues",
+  "bugs": "https://github.com/fynepdf/wrapguard/issues",
   "author": "FynePDF (https://fynepdf.com)",
   "license": "MIT",
   "type": "module",

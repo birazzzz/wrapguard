@@ -15,7 +15,8 @@ concurrency:
 jobs:
   test:
     name: Test (Node ${{ matrix.node }})
-    runs-on: ubuntu-latest
+    # 24.04, not ubuntu-latest (26.04): the locked Playwright 1.56 has no Chromium for 26.04.
+    runs-on: ubuntu-24.04
     strategy:
       fail-fast: false
       matrix:

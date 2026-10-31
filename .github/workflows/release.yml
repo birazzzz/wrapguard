@@ -24,8 +24,9 @@ concurrency:
 
 jobs:
   publish:
-    # Trusted publishing only works on GitHub's own runners.
-    runs-on: ubuntu-latest
+    # Trusted publishing only works on GitHub's own runners. 24.04, not ubuntu-latest (26.04):
+    # the locked Playwright 1.56 has no Chromium for 26.04.
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v5
 
